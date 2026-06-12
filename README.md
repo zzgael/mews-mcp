@@ -10,6 +10,37 @@ This MCP server provides comprehensive access to the Mews hospitality platform A
 
 > **Disclaimer**: This is an unofficial MCP server for the Mews API and is not affiliated with or officially supported by Mews Systems s.r.o.
 
+## GPT Workbench / Plemio fork
+
+This fork (`zzgael/mews-mcp`) adds, on top of the upstream server:
+
+- **Multi-property support.** The Mews `ClientToken` is constant per integration
+  and environment (global), while each property (enterprise) has its own
+  `AccessToken`. Provide all properties as a single JSON env var and select one
+  per call via the `property_name` tool argument.
+- **Token-efficient responses.** Mews responses are raw and mostly null/noise
+  GUIDs. By default responses are projected to essential fields (per-entity
+  whitelist for reservations/customers + a generic prune of null/empty/noise).
+  Pass `full: true` on any read tool to get the raw response.
+- **Category filtering & read-only safe mode** to keep the tool surface lean.
+
+### Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `MEWS_CLIENT_TOKEN` | Global Client Token (shared by all properties). **Required.** |
+| `MEWS_PROPERTIES` | JSON array `[{"propertyName":"...","token":"<AccessToken>"}]`. |
+| `MEWS_BASE_URL` | API endpoint (default `https://api.mews.com`; demo: `https://api.mews-demo.com`). |
+| `MEWS_CLIENT` | Client name/version string (default `mews-mcp/1.0.0`). |
+| `MEWS_ENABLED_SERVICES` | Comma-separated categories to expose (empty = all). e.g. `reservations,customers`. |
+| `MEWS_READ_ONLY` | `true` hides every mutating tool (add/update/delete/cancel/charge/merge). |
+
+Categories: `reservations, customers, companies, finance, payments, rates,
+services, availability, configuration, loyalty, vouchers, tasks`.
+
+Legacy single-property mode (`MEWS_ACCESS_TOKEN`, no `MEWS_PROPERTIES`) is still
+supported: it registers a single `default` property.
+
 ## Quick Start
 
 ### Using Smithery (Recommended)

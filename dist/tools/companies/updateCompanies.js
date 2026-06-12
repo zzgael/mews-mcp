@@ -1,0 +1,44 @@
+import { mewsRequest } from '../../utils/http.js';
+export const updateCompaniesTool = {
+    name: 'updateCompanies',
+    description: 'Updates company information',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            CompanyUpdates: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    properties: {
+                        CompanyId: { type: 'string', description: 'Unique identifier of the company to update' },
+                        Name: { type: 'string', description: 'Company name' },
+                        TaxIdentifier: { type: 'string', description: 'Tax identification number' },
+                        Email: { type: 'string', description: 'Company email address' },
+                        Phone: { type: 'string', description: 'Company phone number' },
+                        WebsiteUrl: { type: 'string', description: 'Company website URL' },
+                        InvoicingEmail: { type: 'string', description: 'Billing email address' },
+                        ContactPersonId: { type: 'string', description: 'Contact person customer ID' }
+                    },
+                    required: ['CompanyId']
+                },
+                description: 'Array of company update objects'
+            }
+        },
+        required: ['CompanyUpdates'],
+        additionalProperties: false
+    },
+    async execute(config, args) {
+        const inputArgs = args;
+        const requestData = {
+            ...inputArgs
+        };
+        const result = await mewsRequest(config, '/api/connector/v1/companies/update', requestData);
+        return {
+            content: [{
+                    type: 'text',
+                    text: JSON.stringify(result, null, 2)
+                }]
+        };
+    }
+};
+//# sourceMappingURL=updateCompanies.js.map

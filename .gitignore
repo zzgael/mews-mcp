@@ -5,7 +5,9 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
-dist/
+# Note: dist/ is intentionally tracked. GPT Workbench clones this repo and runs
+# `node dist/index.js` directly (no build step at runtime / in production where
+# devDependencies like typescript are not installed). Rebuild before committing.
 build/
 lib/
 *.tsbuildinfo

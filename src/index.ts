@@ -12,9 +12,9 @@ import {
 import { z } from "zod";
 
 import { getToolDefinitions, executeTool } from './tools/index.js';
-import { MewsAuthConfigSchema, type MewsAuthConfig } from './types/auth.js';
+import { loadPropertyRegistry } from './config/properties.js';
 
-// Configuration schema for Smithery
+// Configuration schema for Smithery (single-property)
 export const configSchema = z.object({
   clientToken: z.string().describe("Mews API client token"),
   accessToken: z.string().describe("Mews API access token"),
@@ -22,35 +22,45 @@ export const configSchema = z.object({
   baseUrl: z.string().default("https://api.mews.com").describe("Mews API base URL"),
 });
 
-// Load configuration from environment variables or config object
-function loadConfig(configOverride?: z.infer<typeof configSchema>): MewsAuthConfig {
-  try {
-    console.error('[DEBUG] Loading configuration...');
-    console.error('[DEBUG] Environment variables:', {
-      MEWS_CLIENT_TOKEN: process.env.MEWS_CLIENT_TOKEN ? '***SET***' : 'NOT_SET',
-      MEWS_ACCESS_TOKEN: process.env.MEWS_ACCESS_TOKEN ? '***SET***' : 'NOT_SET',
-      MEWS_CLIENT: process.env.MEWS_CLIENT || 'NOT_SET',
-      MEWS_BASE_URL: process.env.MEWS_BASE_URL || 'NOT_SET'
-    });
-    console.error('[DEBUG] Config override:', configOverride ? 'PROVIDED' : 'NOT_PROVIDED');
-    
-    // Use config override from Smithery if provided, otherwise use environment variables
-    const config = MewsAuthConfigSchema.parse({
-      clientToken: configOverride?.clientToken || process.env.MEWS_CLIENT_TOKEN,
-      accessToken: configOverride?.accessToken || process.env.MEWS_ACCESS_TOKEN,
-      client: configOverride?.client || process.env.MEWS_CLIENT || 'mews-mcp/1.0.0',
-      baseUrl: configOverride?.baseUrl || process.env.MEWS_BASE_URL || 'https://api.mews.com',
-    });
-    
-    console.error('[DEBUG] Configuration loaded successfully');
-    return config;
-  } catch (error) {
-    console.error('[ERROR] Failed to load configuration:', error);
+/**
+ * Global, shared part of the Mews auth config: the ClientToken is constant per
+ * integration & environment, the baseUrl is shared by all properties. The
+ * per-property AccessToken is resolved at call time from the registry.
+ */
+interface MewsBaseConfig {
+  clientToken: string;
+  client: string;
+  baseUrl: string;
+}
+
+function loadBaseConfig(configOverride?: z.infer<typeof configSchema>): MewsBaseConfig {
+  const clientToken =
+    configOverride?.clientToken || process.env.MEWS_CLIENT_TOKEN;
+
+  if (!clientToken) {
     throw new McpError(
       ErrorCode.InvalidRequest,
-      `Invalid Mews configuration. Please set MEWS_CLIENT_TOKEN, MEWS_ACCESS_TOKEN environment variables. ${error}`
+      'Invalid Mews configuration. Please set the MEWS_CLIENT_TOKEN environment variable.'
     );
   }
+
+  return {
+    clientToken,
+    client: configOverride?.client || process.env.MEWS_CLIENT || 'mews-mcp/1.0.0',
+    baseUrl: configOverride?.baseUrl || process.env.MEWS_BASE_URL || 'https://api.mews.com',
+  };
+}
+
+/**
+ * Build the propertyName -> AccessToken registry. In Smithery (single-property)
+ * the override carries one AccessToken, registered under 'default'. Otherwise we
+ * read the multi-property MEWS_PROPERTIES env var.
+ */
+function buildRegistry(configOverride?: z.infer<typeof configSchema>): Map<string, string> {
+  if (configOverride?.accessToken) {
+    return new Map([['default', configOverride.accessToken]]);
+  }
+  return loadPropertyRegistry();
 }
 
 // Helper function to convert JSON schema properties to Zod schema
@@ -114,8 +124,9 @@ function initServer(configOverride?: z.infer<typeof configSchema>) {
           properties,
           async (args) => {
             try {
-              const mewsConfig = loadConfig(configOverride);
-              const result = await executeTool(tool.name, mewsConfig, args);
+              const base = loadBaseConfig(configOverride);
+              const registry = buildRegistry(configOverride);
+              const result = await executeTool(tool.name, base, registry, args);
               return result;
             } catch (error) {
               if (error instanceof McpError) {
@@ -169,8 +180,9 @@ function initServer(configOverride?: z.infer<typeof configSchema>) {
         console.error(`[DEBUG] Handling CallTool request for: ${name}`);
         
         try {
-          const config = loadConfig(configOverride);
-          const result = await executeTool(name, config, args);
+          const base = loadBaseConfig(configOverride);
+          const registry = buildRegistry(configOverride);
+          const result = await executeTool(name, base, registry, args);
           console.error(`[DEBUG] Tool ${name} executed successfully`);
           return result;
         } catch (error) {
