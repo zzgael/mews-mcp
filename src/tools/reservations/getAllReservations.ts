@@ -38,13 +38,44 @@ export const getAllReservationsTool: Tool = {
           Cursor: { type: 'string', description: 'Pagination cursor for next page' }
         },
         description: 'Pagination settings'
+      },
+      Extent: {
+        type: 'object',
+        properties: {
+          Reservations: { type: 'boolean', description: 'Include reservations' },
+          ReservationGroups: { type: 'boolean', description: 'Include reservation groups' },
+          Services: { type: 'boolean', description: 'Include services' },
+          BusinessSegments: { type: 'boolean', description: 'Include business segments' },
+          Customers: { type: 'boolean', description: 'Include linked customers (name/contact)' },
+          Items: { type: 'boolean', description: 'Include accounting items' },
+          Products: { type: 'boolean', description: 'Include products' },
+          Rates: { type: 'boolean', description: 'Include rates' },
+          Companies: { type: 'boolean', description: 'Include companies' },
+          TravelAgencies: { type: 'boolean', description: 'Include travel agencies' }
+        },
+        description: 'Which related data to return. Defaults to { Reservations: true, Customers: true } ' +
+          'when omitted. Do NOT rely on the Mews default extent: it implicitly requests the ' +
+          'GDPR-sensitive customer sub-extents (CustomerAdresses, CustomerIdentityDocuments), which ' +
+          'require a dedicated Mews grant and otherwise fail with 401 "No permissions to use such an extent".'
       }
     },
     required: ['StartUtc', 'EndUtc']
   },
-  
+
   async execute(config: MewsAuthConfig, args: unknown): Promise<ToolResult> {
-    const result = await mewsRequest(config, '/api/connector/v1/reservations/getAll', args);
+    const inputArgs = (args ?? {}) as Record<string, unknown>;
+
+    // Send an explicit Extent. Without it, Mews applies a default extent that
+    // implicitly pulls customer addresses + identity documents (GDPR-sensitive
+    // sub-extents most integration tokens are NOT granted), returning a 401
+    // "No permissions to use such an extent (CustomerAdresses,CustomerIdentityDocuments)".
+    // The caller can override Extent via args.
+    const requestData: Record<string, unknown> = {
+      Extent: { Reservations: true, Customers: true },
+      ...inputArgs
+    };
+
+    const result = await mewsRequest(config, '/api/connector/v1/reservations/getAll', requestData);
     return {
       content: [{
         type: 'text',
@@ -52,4 +83,4 @@ export const getAllReservationsTool: Tool = {
       }]
     };
   }
-}; 
+};
